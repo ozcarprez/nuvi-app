@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nuvi</title>
+<style>
+  :root {
+    --bg: #17140F;
+    --surface: #211D16;
+    --surface-2: #2B261C;
+    --border: #3A3327;
+    --text: #F2ECDD;
+    --text-dim: #B4AB96;
+    --accent: #D4A574;
+    --success: #7C9070;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    margin: 0;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .badge { display: inline-block; font-size: 11px; color: var(--text-dim); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; margin-bottom: 16px; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; max-width: 900px; margin: 0 auto; }
+  @media (max-width: 700px) { .layout { grid-template-columns: 1fr; } }
+  input, button {
+    font-family: var(--sans);
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    padding: 9px 12px;
+  }
+  input::placeholder { color: var(--text-dim); }
+  button { cursor: pointer; transition: background .15s; }
+  button:hover { background: var(--border); }
+  button.primary { background: var(--accent); color: #1A1509; border: none; font-weight: 600; }
+  button.primary:hover { opacity: .9; background: var(--accent); }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .client-row { cursor: pointer; padding: 10px; border-radius: 8px; margin-bottom: 6px; border: 1px solid var(--border); }
+  .client-row.active { background: var(--surface-2); border-color: var(--accent); }
+  .client-name { font-size: 14px; font-weight: 600; }
+  .client-phone { font-size: 12px; color: var(--text-dim); }
+  .client-balance { font-size: 13px; color: var(--accent); margin-top: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .balance-block { text-align: center; padding: 16px 0; font-family: var(--mono); border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border); margin: 12px 0; }
+  .balance-label { font-size: 11px; letter-spacing: .08em; color: var(--text-dim); }
+  .balance-amount { font-size: 32px; font-weight: 600; color: var(--accent); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .actions button { flex: 1; }
+  .move { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; }
+  .move-in { color: var(--success); }
+  .empty { color: var(--text-dim); font-size: 14px; text-align: center; padding: 3rem 0; }
+  .wa-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--success); text-decoration: none; margin-top: 10px; }
+  label { font-size: 13px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<h1>Nuvi — Panel de caja</h1>
+<div class="badge">Modo prueba — los datos se guardan solo en este dispositivo</div>
+<div class="layout">
+  <div>
+    <input id="search" placeholder="Buscar por teléfono o nombre" style="width:100%;margin-bottom:10px">
+    <div class="panel" style="margin-bottom:10px">
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:8px">Registrar nuevo cliente</div>
+      <input id="newPhone" placeholder="Teléfono (10 dígitos)" style="width:100%;margin-bottom:6px">
+      <input id="newName" placeholder="Nombre" style="width:100%;margin-bottom:6px">
+      <button class="primary" id="addClientBtn" style="width:100%">Agregar cliente</button>
+    </div>
+    <div id="clientList"></div>
+  </div>
+  <div id="detail"><div class="empty">Selecciona o registra un cliente</div></div>
+</div>
+
+<script>
+const STORAGE_KEY = 'nuvi_clients_v1';
+const LADA = '52';
+let bonusPct = 20;
+let clients = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || [
+  { id: '1', phone: '6641230001', name: 'Carlos Ruiz', balance: 1420.50, moves: [] },
+  { id: '2', phone: '6641230002', name: 'Elena Martinez', balance: 45.00, moves: [] },
+];
+let selectedId = null;
+
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(clients)); }
+function fmt(n){ return '$' + Number(n).toLocaleString('es-MX',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function today(){ return new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}); }
+function waLink(phone, text){ return `https://wa.me/${LADA}${phone}?text=${encodeURIComponent(text)}`; }
+
+function renderList(){
+  const q = document.getElementById('search').value.toLowerCase();
+  const box = document.getElementById('clientList');
+  const filtered = clients.filter(c => c.phone.includes(q) || c.name.toLowerCase().includes(q));
+  box.innerHTML = filtered.map(c => `
+    <div data-id="${c.id}" class="client-row ${c.id===selectedId ? 'active':''}">
+      <div class="client-name">${c.name}</div>
+      <div class="client-phone">${c.phone}</div>
+      <div class="client-balance">${fmt(c.balance)}</div>
+    </div>`).join('') || '<div class="empty" style="padding:1rem 0">Sin resultados</div>';
+  box.querySelectorAll('.client-row').forEach(el => el.onclick = () => { selectedId = el.dataset.id; renderDetail(); renderList(); });
+}
+
+function renderDetail(){
+  const det = document.getElementById('detail');
+  const c = clients.find(x => x.id === selectedId);
+  if(!c){ det.innerHTML = '<div class="empty">Selecciona o registra un cliente</div>'; return; }
+  det.innerHTML = `
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <span style="font-size:16px;font-weight:600">${c.name}</span>
+        <span style="font-size:13px;color:var(--text-dim)">${c.phone}</span>
+      </div>
+      <div class="balance-block">
+        <div class="balance-label">SALDO DISPONIBLE</div>
+        <div class="balance-amount">${fmt(c.balance)}</div>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <label>Bono al cargar</label>
+        <input id="bonusPct" type="number" min="0" max="100" value="${bonusPct}" style="width:64px">
+        <span style="font-size:13px;color:var(--text-dim)">%</span>
+      </div>
+      <input id="amount" type="number" placeholder="Monto en pesos" style="width:100%;margin-bottom:8px">
+      <div class="actions">
+        <button class="primary" id="rechargeBtn">Cargar efectivo</button>
+        <button id="consumeBtn">Descontar consumo</button>
+      </div>
+      <div id="bonusPreview" style="font-size:12px;color:var(--text-dim);margin-top:6px;min-height:16px"></div>
+      <div id="waAction"></div>
+      <div id="history" style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px"></div>
+    </div>`;
+
+  const amountEl = document.getElementById('amount');
+  document.getElementById('bonusPct').oninput = e => { bonusPct = parseFloat(e.target.value)||0; amountEl.oninput(); };
+  amountEl.oninput = () => {
+    const v = parseFloat(amountEl.value) || 0;
+    document.getElementById('bonusPreview').textContent = v > 0 ? `Bono: ${fmt(v*bonusPct/100)} · Total a saldo: ${fmt(v*(1+bonusPct/100))}` : '';
+  };
+
+  document.getElementById('rechargeBtn').onclick = () => {
+    const v = parseFloat(amountEl.value);
+    if(!v || v<=0) return;
+    const bonus = v * bonusPct/100;
+    c.balance += v + bonus;
+    c.moves.unshift({ type:'recarga', amount:v, bonus, date: today() });
+    save();
+    const msg = `Hola ${c.name}, cargaste ${fmt(v)} (+${fmt(bonus)} de bono) el ${today()}. Tu nuevo saldo es ${fmt(c.balance)}.`;
+    document.getElementById('waAction').innerHTML = `<a class="wa-link" href="${waLink(c.phone,msg)}" target="_blank">Enviar confirmación por WhatsApp</a>`;
+    amountEl.value=''; renderList(); renderDetail();
+  };
+
+  document.getElementById('consumeBtn').onclick = () => {
+    const v = parseFloat(amountEl.value);
+    if(!v || v<=0 || v>c.balance) return;
+    c.balance -= v;
+    c.moves.unshift({ type:'consumo', amount:v, date: today() });
+    save();
+    const msg = `Hola ${c.name}, usaste ${fmt(v)} de tu saldo el ${today()}. Te quedan ${fmt(c.balance)} disponibles.`;
+    document.getElementById('waAction').innerHTML = `<a class="wa-link" href="${waLink(c.phone,msg)}" target="_blank">Enviar confirmación por WhatsApp</a>`;
+    amountEl.value=''; renderList(); renderDetail();
+  };
+
+  const hist = document.getElementById('history');
+  hist.innerHTML = c.moves.length ? c.moves.slice(0,5).map(m => `
+    <div class="move">
+      <span style="color:var(--text-dim)">${m.type==='recarga' ? 'Recarga + bono' : 'Consumo'} · ${m.date}</span>
+      <span class="${m.type==='recarga' ? 'move-in' : ''}">${m.type==='recarga' ? '+' : '-'}${fmt(m.amount + (m.bonus||0))}</span>
+    </div>`).join('') : '<div class="empty" style="padding:.5rem 0">Sin movimientos</div>';
+}
+
+document.getElementById('search').oninput = renderList;
+document.getElementById('addClientBtn').onclick = () => {
+  const phone = document.getElementById('newPhone').value.trim();
+  const name = document.getElementById('newName').value.trim();
+  if(phone.length<8 || !name) return;
+  const id = Date.now().toString();
+  clients.push({ id, phone, name, balance: 0, moves: [] });
+  save();
+  document.getElementById('newPhone').value=''; document.getElementById('newName').value='';
+  selectedId = id; renderDetail(); renderList();
+};
+
+renderList(); renderDetail();
+</script>
+</body>
+</html>
