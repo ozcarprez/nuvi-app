@@ -85,10 +85,21 @@
 const STORAGE_KEY = 'nuvi_clients_v1';
 const LADA = '52';
 let bonusPct = 20;
-let clients = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || [
-  { id: '1', phone: '6641230001', name: 'Carlos Ruiz', balance: 1420.50, moves: [] },
-  { id: '2', phone: '6641230002', name: 'Elena Martinez', balance: 45.00, moves: [] },
-];
+function loadClientsFromStorage(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) throw new Error('vacio');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error('formato invalido');
+    return parsed;
+  } catch (e) {
+    return [
+      { id: '1', phone: '6641230001', name: 'Carlos Ruiz', balance: 1420.50, moves: [] },
+      { id: '2', phone: '6641230002', name: 'Elena Martinez', balance: 45.00, moves: [] },
+    ];
+  }
+}
+let clients = loadClientsFromStorage();
 let selectedId = null;
 
 function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(clients)); }
@@ -153,8 +164,8 @@ function renderDetail(){
     c.moves.unshift({ type:'recarga', amount:v, bonus, date: today() });
     save();
     const msg = `Hola ${c.name}, cargaste ${fmt(v)} (+${fmt(bonus)} de bono) el ${today()}. Tu nuevo saldo es ${fmt(c.balance)}.`;
-    document.getElementById('waAction').innerHTML = `<a class="wa-link" href="${waLink(c.phone,msg)}" target="_blank">Enviar confirmación por WhatsApp</a>`;
     amountEl.value=''; renderList(); renderDetail();
+    document.getElementById('waAction').innerHTML = `<a class="wa-link" href="${waLink(c.phone,msg)}" target="_blank">Enviar confirmación por WhatsApp</a>`;
   };
 
   document.getElementById('consumeBtn').onclick = () => {
@@ -164,8 +175,8 @@ function renderDetail(){
     c.moves.unshift({ type:'consumo', amount:v, date: today() });
     save();
     const msg = `Hola ${c.name}, usaste ${fmt(v)} de tu saldo el ${today()}. Te quedan ${fmt(c.balance)} disponibles.`;
-    document.getElementById('waAction').innerHTML = `<a class="wa-link" href="${waLink(c.phone,msg)}" target="_blank">Enviar confirmación por WhatsApp</a>`;
     amountEl.value=''; renderList(); renderDetail();
+    document.getElementById('waAction').innerHTML = `<a class="wa-link" href="${waLink(c.phone,msg)}" target="_blank">Enviar confirmación por WhatsApp</a>`;
   };
 
   const hist = document.getElementById('history');
